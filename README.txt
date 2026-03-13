@@ -2,10 +2,14 @@
 
 **PythonAnywhereのBashコンソールで：**
 
+
 ```bash
    cd /home/naomi
+
    git add .
+
    git commit -m "更新内容のメモ"
+
    git push
 ```
 
