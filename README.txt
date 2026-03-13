@@ -4,6 +4,7 @@
 
 
 ```bash
+
    cd /home/naomi
 
    git add .
