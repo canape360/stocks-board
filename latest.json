@@ -1,0 +1,61 @@
+{
+  "_meta": {
+    "generated_at": "2026-03-13T12:45:01.921495+09:00"
+  },
+  "ホンダ": {
+    "ticker": "7267.T",
+    "latest_price": 1361.0,
+    "prev_close": 1448.5,
+    "change": -87.5,
+    "change_pct": -6.040731791508457,
+    "history_csv": "ホンダ_7267_T.csv",
+    "source": "1d"
+  },
+  "日本製鉄": {
+    "ticker": "5401.T",
+    "latest_price": 596.0999755859375,
+    "prev_close": 602.0999755859375,
+    "change": -6.0,
+    "change_pct": -0.9965122476813026,
+    "history_csv": "日本製鉄_5401_T.csv",
+    "source": "1d"
+  },
+  "日立製作所": {
+    "ticker": "6501.T",
+    "latest_price": 4860.0,
+    "prev_close": 4926.0,
+    "change": -66.0,
+    "change_pct": -1.3398294762484775,
+    "history_csv": "日立製作所_6501_T.csv",
+    "source": "1d"
+  },
+  "fx": [
+    {
+      "name": "USD/JPY",
+      "ticker": "JPY=X",
+      "latest_price": 159.35400390625,
+      "prev_close": 159.0749969482422,
+      "change": 0.2790069580078125,
+      "change_pct": 0.17539334487530572,
+      "source": "yfinance"
+    },
+    {
+      "name": "EUR/JPY",
+      "ticker": "EURJPY=X",
+      "latest_price": 183.39300537109375,
+      "prev_close": 183.61900329589844,
+      "change": -0.2259979248046875,
+      "change_pct": -0.12307981240944667,
+      "source": "yfinance"
+    },
+    {
+      "name": "GBP/JPY",
+      "ticker": "GBPJPY=X",
+      "latest_price": 212.6580047607422,
+      "prev_close": 212.87100219726562,
+      "change": -0.2129974365234375,
+      "change_pct": -0.10005939480946997,
+      "source": "yfinance"
+    }
+  ]
+}

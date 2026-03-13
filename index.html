@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>株価ダッシュボード</title>
+  <style>
+    body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;padding:2rem;background:#f9fafb;color:#111827;line-height:1.7}
+    h1{margin:0 0 .5rem}
+    .sub{color:#6b7280;margin-bottom:1.2rem}
+    .wrap{max-width:1100px}
+    .grid{display:grid;grid-template-columns:1fr;gap:1rem}
+    @media (min-width:980px){ .grid{grid-template-columns:1.05fr .95fr} }
+
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 6px 16px rgba(0,0,0,.05);padding:1.2rem}
+    .row{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:.8rem}
+    button{border:1px solid #e5e7eb;background:#111827;color:#fff;padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-size:.95rem}
+    button:disabled{opacity:.6;cursor:not-allowed}
+
+    .table-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;margin-top:.8rem;border-radius:12px;overflow:hidden;min-width:520px}
+    th,td{border-bottom:1px solid #e5e7eb;padding:.75rem .8rem;text-align:left;vertical-align:middle}
+    th{background:#f3f4f6;font-weight:600;white-space:nowrap}
+    tr:hover td{background:#f9fafb}
+    .right{text-align:right}
+    .center{text-align:center}
+
+    code{background:#f3f4f6;padding:.15rem .35rem;border-radius:6px}
+    .muted{color:#6b7280;font-size:.95rem}
+    .err{margin-top:.8rem;padding:.7rem .9rem;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;display:none;white-space:pre-wrap}
+
+    .badge{display:inline-flex;align-items:center;gap:.4rem;border-radius:999px;padding:.28rem .6rem;font-weight:800;font-size:.9rem;border:1px solid #e5e7eb;background:#f3f4f6;color:#374151;white-space:nowrap}
+    .badge.green{background:#e8f7ee;border-color:#bfe8cc;color:#166534}
+    .badge.red{background:#feeceb;border-color:#fecaca;color:#991b1b}
+    .badge.gray{background:#f3f4f6;border-color:#e5e7eb;color:#4b5563}
+
+    .chg.up{color:#166534;font-weight:700}
+    .chg.down{color:#991b1b;font-weight:700}
+
+    .mini{font-size:.88rem}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>株価ダッシュボード</h1>
+    <div class="sub">
+      API: <code>/stocks/latest</code> と <code>/signals</code> を読み込み、表示します。
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="row">
+          <div class="muted">最終更新: <span id="updated">読み込み中...</span></div>
+          <button id="reloadBtn" type="button">更新</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>銘柄</th>
+                <th>ティッカー</th>
+                <th class="right">最新価格</th>
+                <th class="right">前日比</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="4" class="muted">読み込み中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="err" class="err"></div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <div style="font-weight:700;">MACDシグナル（一覧）</div>
+            <div class="muted">API: <code>/signals</code></div>
+          </div>
+          <div class="muted" id="sigUpdated">—</div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>銘柄</th>
+                <th>判定</th>
+                <th class="right">RSI</th>
+                <th class="right">MACD</th>
+                <th class="right">Signal</th>
+                <th class="right">Hist</th>
+              </tr>
+            </thead>
+            <tbody id="sigBody">
+              <tr><td colspan="6" class="muted">読み込み中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="muted mini" style="margin-top:.7rem;">
+          BUY_SETUP = ヒスト縮小 + RSI回復 + MACD&lt;Signal（クロス前）
+        </div>
+
+        <div id="sigErr" class="err"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const updatedEl = document.getElementById("updated");
+  const tbody = document.getElementById("tbody");
+  const errBox = document.getElementById("err");
+  const btn = document.getElementById("reloadBtn");
+
+  const sigUpdated = document.getElementById("sigUpdated");
+  const sigBody = document.getElementById("sigBody");
+  const sigErr = document.getElementById("sigErr");
+
+  function yenLike(n){
+    if (typeof n !== "number") return String(n ?? "");
+    return n.toLocaleString("ja-JP");
+  }
+
+  function f2(n){
+    if (typeof n !== "number" || !isFinite(n)) return "—";
+    return n.toFixed(2);
+  }
+
+  function f3(n){
+    if (typeof n !== "number" || !isFinite(n)) return "—";
+    return n.toFixed(3);
+  }
+
+  function showError(el, msg){
+    el.style.display = "block";
+    el.textContent = msg;
+  }
+
+  function clearError(el){
+    el.style.display = "none";
+    el.textContent = "";
+  }
+
+  function badgeHtml(signal){
+    if(signal === "BUY_SETUP") return `<span class="badge green">🟢 BUY_SETUP</span>`;
+    if(signal === "NONE") return `<span class="badge red">🔴 NONE</span>`;
+    if(signal === "INSUFFICIENT_DATA") return `<span class="badge gray">⚪ DATA不足</span>`;
+    if(signal === "NO_LOCAL_DATA") return `<span class="badge gray">⚪ LOCALなし</span>`;
+    if(signal === "BAD_CSV") return `<span class="badge gray">⚪ CSV異常</span>`;
+    return `<span class="badge gray">⚪ ${signal ?? "UNKNOWN"}</span>`;
+  }
+
+  async function loadLatest(){
+    clearError(errBox);
+    try{
+      const res = await fetch("/stocks/latest?ts=" + Date.now(), { cache:"no-store" });
+      if(!res.ok){
+        const text = await res.text();
+        throw new Error("HTTP " + res.status + "\n" + text);
+      }
+
+      const data = await res.json();
+
+      updatedEl.textContent =
+        (data?._meta?.generated_at ?? "不明") +
+        " （" + new Date().toLocaleTimeString("ja-JP") + " 取得）";
+
+      const entries = Object.entries(data).filter(([k]) => k !== "_meta");
+      if(entries.length === 0){
+        tbody.innerHTML = `<tr><td colspan="4" class="muted">データがありません</td></tr>`;
+        return;
+      }
+
+      entries.sort((a,b) =>
+        String(a[1]?.ticker ?? "").localeCompare(String(b[1]?.ticker ?? ""))
+      );
+
+      tbody.innerHTML = entries.map(([name, v]) => {
+        const chg = (typeof v?.change === "number") ? v.change : null;
+        const pct = (typeof v?.change_pct === "number") ? v.change_pct : null;
+
+        const chgClass = (chg == null) ? "" : (chg >= 0 ? "up" : "down");
+        const sign = (chg == null) ? "" : (chg >= 0 ? "+" : "");
+        const chgText = (chg == null)
+          ? "—"
+          : `${sign}${yenLike(chg)}（${sign}${(pct ?? 0).toFixed(2)}%）`;
+
+        return `
+          <tr>
+            <td>${name}</td>
+            <td>${v?.ticker ?? ""}</td>
+            <td class="right">${yenLike(v?.latest_price ?? "")}</td>
+            <td class="right"><span class="chg ${chgClass}">${chgText}</span></td>
+          </tr>
+        `;
+      }).join("");
+
+    }catch(e){
+      showError(errBox, String(e));
+      tbody.innerHTML = `<tr><td colspan="4" class="muted">読み込みに失敗しました</td></tr>`;
+      updatedEl.textContent = "失敗";
+    }
+  }
+
+  async function loadSignals(){
+    clearError(sigErr);
+    try{
+      const res = await fetch("/signals?ts=" + Date.now(), { cache:"no-store" });
+      if(!res.ok){
+        const text = await res.text();
+        throw new Error("HTTP " + res.status + "\n" + text);
+      }
+
+      const data = await res.json();
+      if(data.error) throw new Error(data.error);
+
+      sigUpdated.textContent = data?._meta?.generated_at ?? "—";
+
+      const entries = Object.entries(data).filter(([k]) => k !== "_meta");
+      if(entries.length === 0){
+        sigBody.innerHTML = `<tr><td colspan="6" class="muted">データがありません</td></tr>`;
+        return;
+      }
+
+      entries.sort((a,b) =>
+        String(a[1]?.ticker ?? "").localeCompare(String(b[1]?.ticker ?? ""))
+      );
+
+      sigBody.innerHTML = entries.map(([name, s]) => `
+        <tr>
+          <td>${name}</td>
+          <td>${badgeHtml(s?.signal)}</td>
+          <td class="right">${f2(s?.rsi)}</td>
+          <td class="right">${f3(s?.macd)}</td>
+          <td class="right">${f3(s?.signal_line)}</td>
+          <td class="right">${f3(s?.hist)}</td>
+        </tr>
+      `).join("");
+
+    }catch(e){
+      showError(sigErr, String(e));
+      sigBody.innerHTML = `<tr><td colspan="6" class="muted">読み込みに失敗しました</td></tr>`;
+      sigUpdated.textContent = "失敗";
+    }
+  }
+
+  async function loadAll(){
+    btn.disabled = true;
+    btn.textContent = "更新中...";
+    try{
+      await Promise.all([loadLatest(), loadSignals()]);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "更新";
+    }
+  }
+
+  btn.addEventListener("click", loadAll);
+  loadAll();
+</script>
+</body>
+</html>
